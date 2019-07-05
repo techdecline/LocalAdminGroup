@@ -29,7 +29,7 @@ Describe  "Module Function Tests" {
         "$PSScriptRoot\..\function-*.ps1" | should exist
     }
 
-    $functionArr = ("New-ADLocalAdminGroup","Convert-ADLocalAdminGroup","Get-ADRemoteAdminGroupMember","Add-ADRemoteAdminGroupMember","Remove-ADRemoteAdminGroupMember")
+    $functionArr = ("New-ADLocalAdminGroup","Convert-ADLocalAdminGroup","Get-ADRemoteAdminGroupMember","Add-ADRemoteAdminGroupMember","Remove-ADRemoteAdminGroupMember","Get-CMGroupMember","Add-CMRemoteAdminGroup")
 
     foreach ($functionStr in $functionArr ) {
         Context "Test function $functionStr" {
