@@ -12,7 +12,7 @@
 RootModule = 'LocalAdminGroup.psm1'
 
 # Version number of this module.
-ModuleVersion = '0.0.1'
+ModuleVersion = '0.0.2'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -21,16 +21,16 @@ ModuleVersion = '0.0.1'
 GUID = '62be895f-f900-4bfd-8741-1ed07526ae7a'
 
 # Author of this module
-Author = 'administrator'
+Author = 'Cornelius Schuchardt'
 
 # Company or vendor of this module
-CompanyName = 'Unknown'
+CompanyName = 'SoftEd Systems GmbH'
 
 # Copyright statement for this module
-Copyright = '(c) 2019 administrator. All rights reserved.'
+Copyright = '(c) 2019 Cornelius Schuchardt. All rights reserved.'
 
 # Description of the functionality provided by this module
-# Description = ''
+Description = 'LocalAdminGroup allows to convert local administrator group members on Windows into a centralized AD Group per client.'
 
 # Minimum version of the Windows PowerShell engine required by this module
 # PowerShellVersion = ''
@@ -101,7 +101,7 @@ PrivateData = @{
         # LicenseUri = ''
 
         # A URL to the main website for this project.
-        # ProjectUri = ''
+        ProjectUri = 'https://github.com/techdecline/LocalAdminGroup'
 
         # A URL to an icon representing this module.
         # IconUri = ''
@@ -120,5 +120,3 @@ PrivateData = @{
 # DefaultCommandPrefix = ''
 
 }
-
-
