@@ -48,7 +48,7 @@ function New-ADLocalAdminGroup {
             return $null
         }
         else {
-            Write-VerboseLog -LogFilePath $LogFilePath -Message  -Message "Found machine $ComputerName in Active Directory"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message "Found machine $ComputerName in Active Directory"
         }
         #endregion
         <#
