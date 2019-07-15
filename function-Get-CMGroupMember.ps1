@@ -36,7 +36,7 @@ function Get-CMGroupMember {
             }
         }
         catch [System.Management.Automation.RuntimeException] {
-            throw "Could not add resource using CM web service"
+            throw "Could not get resource using CM web service"
         }
     }
 }

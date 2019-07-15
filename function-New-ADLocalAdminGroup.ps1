@@ -69,7 +69,7 @@ function New-ADLocalAdminGroup {
         #>
 
         #region AD Group Check
-        Write-VerboseLog -LogFilePath $LogFilePath -Message  -Message "Checking for existing AD group: $targetGroupName"
+        Write-VerboseLog -LogFilePath $LogFilePath -Message "Checking for existing AD group: $targetGroupName"
         try {
             $adGroup = Get-ADGroup -Identity $targetGroupName
         }
