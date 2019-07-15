@@ -27,7 +27,7 @@ function Convert-ADLocalAdminGroup {
 
         # Identities to be ignored during the conversion
         [Parameter(Mandatory=$false)]
-        [String[]]$ExcludeIdentityArr = @("Administrator","cm-push","Domain Admins")
+        [String[]]$ExcludeIdentityArr
     )
 
     process {
