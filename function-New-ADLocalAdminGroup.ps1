@@ -22,44 +22,54 @@ function New-ADLocalAdminGroup {
         [Parameter(Mandatory=$false)]
         [ValidatePattern("^LDAP://.*")]
         [string]
-        $GroupPath
+        $GroupPath,
+
+        # Log File Path
+        [Parameter(Mandatory=$false)]
+        [String]
+        $LogFilePath = $env:TEMP
     )
 
     process {
+        # Initialize Logging
+        $LogFilePath = Join-Path -Path $LogFilePath -ChildPath "New-ADLocalAdminGroup_$(get-date -Format yyyyMMdd).txt"
+        Start-Log -LogFilePath $LogFilePath | Out-Null
+
         #region Variables
         $targetGroupName = $Prefix + $ComputerName
         #endregion
 
         #region AD Computer Search
-        Write-Verbose "Searching Active Directory for Client: $ComputerName"
+        Write-VerboseLog -LogFilePath $LogFilePath -Message  "Searching Active Directory for Client: $ComputerName"
         $computerObj = Get-ADComputer -Identity $ComputerName
         if (-not $computerObj) {
-            Write-Warning -Message "Could not find machine $ComputerName in Active Directory"
+            Write-WarningLog -LogFilePath $LogFilePath -Message  -Message "Could not find machine $ComputerName in Active Directory"
+            Stop-Log -LogFilePath $LogFilePath | Out-Null
             return $null
         }
         else {
-            Write-Verbose -Message "Found machine $ComputerName in Active Directory"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message  -Message "Found machine $ComputerName in Active Directory"
         }
         #endregion
         <#
         #region Online Check
-        Write-Verbose -Message "Checking WSMan connectivity to $ComputerName"
+        Write-VerboseLog -LogFilePath $LogFilePath -Message  -Message "Checking WSMan connectivity to $ComputerName"
         if (Test-WSMan -ComputerName $ComputerName) {
-            Write-Verbose "Successfully connected to: $ComputerName"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message  "Successfully connected to: $ComputerName"
         }
         elseif ($Force) {
-            Write-Verbose "Machine is offline, but Parameter Force is set"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message  "Machine is offline, but Parameter Force is set"
             $online = $false
         }
         else {
-            Write-Warning -Message "Machine $ComputerName is offline and Parameter Force is not set"
+            Write-WarningLog -LogFilePath $LogFilePath -Message  -Message "Machine $ComputerName is offline and Parameter Force is not set"
             return $null
         }
         #endregion
         #>
 
         #region AD Group Check
-        Write-Verbose -Message "Checking for existing AD group: $targetGroupName"
+        Write-VerboseLog -LogFilePath $LogFilePath -Message  -Message "Checking for existing AD group: $targetGroupName"
         try {
             $adGroup = Get-ADGroup -Identity $targetGroupName
         }
@@ -68,11 +78,12 @@ function New-ADLocalAdminGroup {
         }
 
         if ($adGroup) {
-            Write-Verbose "Group exists: true"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message  "Group exists: true"
+            Stop-Log -LogFilePath $LogFilePath | Out-Null
             return $adGroup
         }
         else {
-            Write-Verbose "Group exists: false"
+            Write-VerboseLog -LogFilePath $LogFilePath -Message  "Group exists: false"
             $groupParam = @{
                 Name = $targetGroupName
                 GroupCategory = "Security"
@@ -80,20 +91,25 @@ function New-ADLocalAdminGroup {
             }
             if ($GroupPath) {
                 if ([adsi]::Exists($GroupPath)) {
-                    Write-Verbose "Group will be created at: $GroupPath"
+                    Write-VerboseLog -LogFilePath $LogFilePath -Message  "Group will be created at: $GroupPath"
                     $groupParam.Add("Path",$GroupPath)
                 }
                 else {
-                    throw "LDAP location does not exist"
+                    Write-ErrorLog -LogFilePath $LogFilePath -Message  "LDAP location does not exist"
+                    Stop-Log -LogFilePath $LogFilePath | Out-Null
+                    return $null
                 }
             }
             try {
-                Write-Verbose "Adding Group: $targetGroupName"
+                Write-VerboseLog -LogFilePath $LogFilePath -Message  "Adding Group: $targetGroupName"
                 $groupObj = New-ADGroup @groupParam -ErrorAction Stop -PassThru
             }
             catch [System.Management.Automation.ActionPreferenceStopException] {
-                throw "Could not create group: $targetGroupName"
+                Write-ErrorLog -LogFilePath $LogFilePath -Message  "Could not create group: $targetGroupName"
+                Stop-Log -LogFilePath $LogFilePath | Out-Null
+                return $null
             }
+            Stop-Log -LogFilePath $LogFilePath | Out-Null
             return $groupObj
         }
         #endregion
