@@ -20,7 +20,7 @@ function Convert-ADLocalAdminGroup {
 
     process {
         #region Functions
-        function Get-RemoteAdminGroupMember {
+        <#function Get-RemoteAdminGroupMember {
             param (
                 [String]$ComputerName
             )
@@ -60,7 +60,7 @@ function Convert-ADLocalAdminGroup {
                 }
                 return $adminArr
             }
-        }
+        }#>
         #endregion
 
         #region CurrentLocalAdminGroup
@@ -84,7 +84,8 @@ function Convert-ADLocalAdminGroup {
             Write-Verbose "Adding new members to ADGroup: $GroupObject"
             try {
                 $currentAdminArr | ForEach-Object {
-                    $currentObj = ($_ -split "\\")[1]
+                    #$currentObj = ($_ -split "\\")[1]
+                    $currentObj = $_
                     Write-Verbose "Adding member: $currentObj"
                     Add-ADGroupMember -Identity $GroupObject -Members $currentObj
                 }

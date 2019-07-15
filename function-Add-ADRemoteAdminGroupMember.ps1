@@ -25,6 +25,6 @@ function Add-ADRemoteAdminGroupMember {
                 }
             }
         }
-        return $adminArr
+        return $true
     }
 }

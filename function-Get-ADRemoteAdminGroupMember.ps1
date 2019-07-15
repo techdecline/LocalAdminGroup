@@ -6,42 +6,118 @@
 function Get-ADRemoteAdminGroupMember {
     [CmdletBinding()]
     param (
-        [String]$ComputerName
+        [String]$ComputerName,
+        [String]$GroupName
     )
-    invoke-command -ComputerName $ComputerName -ScriptBlock {
-        function GetLocalAdminGroupMember {
-            param ([String]$Platform)
-            #$adminRegex = "^S-1-5-21.*-500$"
-            $domadminRegex = "^S-1-5-21.*-512"
-            $adminArr = [System.Collections.ArrayList]@()
-            if ($Platform -eq "W10") {
-                Get-LocalGroupMember -SID S-1-5-32-544 | Where-Object {$_.PrincipalSource -eq "ActiveDirectory" -and $_.SID -notmatch $domadminRegex} | ForEach-Object {$adminArr.Add($_.Name)} | Out-Null
-            }
-            elseif ($Platform -eq "W7") {
-                Get-LocalGroupMember -SID S-1-5-32-544 | Where-Object {($_.Name -split "\\")[0] -eq $env:USERDOMAIN -and $_.SID -notmatch $domadminRegex } | ForEach-Object {$adminArr.Add($_.Name)} | Out-Null
-            }
-            if ($adminArr) {
-                return $adminArr
-            }
-            else {
-                return $null
-            }
-        }
 
-        $osVersion = (Get-WmiObject -Class win32_operatingsystem -Property Caption).Caption
-        switch -regex ($osVersion) {
-            "^Microsoft Windows 10.*" {
-                $adminArr = GetLocalAdminGroupMember -Platform "W10"
+    Function Get-LocalGroupMember {
+        [cmdletbinding()]
+
+        Param(
+        [Parameter(Position = 0)]
+        [ValidateNotNullorEmpty()]
+        [string]$Name = "Administrators",
+
+        [Parameter(ValueFromPipeline,ValueFromPipelineByPropertyName)]
+        [ValidateNotNullorEmpty()]
+        [Alias("CN","host")]
+        [string[]]$Computername = $env:computername
+        )
+
+
+        Begin {
+            Write-Verbose "[Starting] $($MyInvocation.Mycommand)"
+            Write-Verbose "[Begin]    Querying members of the $Name group"
+        } #begin
+
+        Process {
+
+        foreach ($computer in $computername) {
+
+            #define a flag to indicate if there was an error
+            $script:NotFound = $False
+
+            #define a trap to handle errors because we're not using cmdlets that
+            #could support Try/Catch. Traps must be in same scope.
+            Trap [System.Runtime.InteropServices.COMException] {
+                $errMsg = "Failed to enumerate $name on $computer. $($_.exception.message)"
+                Write-Warning $errMsg
+
+                #set a flag
+                $script:NotFound = $True
+
+                Continue
             }
-            "^Microsoft Windows 7.*" {
-                if ($PSVersionTable.PSVersion.Major -ne 5) {
-                    Throw [System.NotImplementedException] "Unsupported OS: Windows 7 without WMF 5.1"
+
+            #define a Trap for all other errors
+            Trap {
+            Write-Warning "Oops. There was some other type of error: $($_.exception.message)"
+            Continue
+            }
+
+            Write-Verbose "[Process]  Connecting to $computer"
+            #the WinNT moniker is case-sensitive
+            [ADSI]$group = "WinNT://$computer/$Name,group"
+
+            Write-Verbose "[Process]  Getting group member details"
+            $members = $group.invoke("Members")
+
+            Write-Verbose "[Process]  Counting group members"
+
+            if (-Not $script:NotFound) {
+                $found = ($members | measure).count
+                Write-Verbose "[Process]  Found $found members"
+
+                if ($found -gt 0 ) {
+                $members | foreach {
+
+                    #define an ordered hashtable which will hold properties
+                    #for a custom object
+                    $Hash = [ordered]@{Computername = $computer.toUpper()}
+
+                    #Get the name property
+                    $hash.Add("Name",$_[0].GetType().InvokeMember("Name", 'GetProperty', $null, $_, $null))
+
+                    #get ADS Path of member
+                    $ADSPath = $_[0].GetType().InvokeMember("ADSPath", 'GetProperty', $null, $_, $null)
+                    $hash.Add("ADSPath",$ADSPath)
+
+                    #get the member class, ie user or group
+                    $hash.Add("Class",$_[0].GetType().InvokeMember("Class", 'GetProperty', $null, $_, $null))
+
+                    <#
+                    Domain members will have an ADSPath like WinNT://MYDomain/Domain Users.
+                    Local accounts will be like WinNT://MYDomain/Computername/Administrator
+                    #>
+
+                    $hash.Add("Domain",$ADSPath.Split("/")[2])
+
+                    #if computer name is found between two /, then assume
+                    #the ADSPath reflects a local object
+                    if ($ADSPath -match "/$computer/") {
+                        $local = $True
+                        }
+                    else {
+                        $local = $False
+                        }
+                    $hash.Add("IsLocal",$local)
+
+                    #turn the hashtable into an object
+                    New-Object -TypeName PSObject -Property $hash
+                } #foreach member
                 }
                 else {
-                    $adminArr = GetLocalAdminGroupMember -Platform "W7"
+                    Write-Warning "No members found in $Name on $Computer."
                 }
-            }
-        }
-        return $adminArr
-    }
+            } #if no errors
+        } #foreach computer
+
+        } #process
+
+        End {
+            Write-Verbose "[Ending]  $($MyInvocation.Mycommand)"
+        } #end
+    } #end function
+    $objArr = (Get-LocalGroupMember -Name Administrators -Computername cm-client1 | Where-Object {$_.Domain -eq $env:USERDOMAIN}).Name
+    return $objArr
 }

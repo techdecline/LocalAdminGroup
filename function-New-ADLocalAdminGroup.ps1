@@ -57,12 +57,12 @@ function New-ADLocalAdminGroup {
         }
         #endregion
         #>
-        
+
         #region AD Group Check
         Write-Verbose -Message "Checking for existing AD group: $targetGroupName"
         try {
             $adGroup = Get-ADGroup -Identity $targetGroupName
-        } 
+        }
         catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
             $adGroup = $null
         }
@@ -82,7 +82,7 @@ function New-ADLocalAdminGroup {
                 if ([adsi]::Exists($GroupPath)) {
                     Write-Verbose "Group will be created at: $GroupPath"
                     $groupParam.Add("Path",$GroupPath)
-                } 
+                }
                 else {
                     throw "LDAP location does not exist"
                 }
@@ -92,7 +92,7 @@ function New-ADLocalAdminGroup {
                 $groupObj = New-ADGroup @groupParam -ErrorAction Stop -PassThru
             }
             catch [System.Management.Automation.ActionPreferenceStopException] {
-                throw "Could not create group"
+                throw "Could not create group: $targetGroupName"
             }
             return $groupObj
         }
