@@ -6,110 +6,94 @@
 function Convert-ADLocalAdminGroup {
     [CmdletBinding()]
     param (
-        # Target ComputerName
+        # Computer Name to be converted
         [Parameter(Mandatory)]
-        [ValidateScript({$_.Length -le 15 -and (Test-WSMan $_)})]
-        [String]
+        [String[]]
         $ComputerName,
 
-        # Target AD Group Object
-        [Parameter(Mandatory)]
-        [Microsoft.ActiveDirectory.Management.ADGroup]
-        $GroupObject
+        # AD Group Prefix
+        [Parameter(Mandatory=$false)]
+        [ValidateScript({$_.Length -le 5})]
+        [String]
+        $Prefix = "LAG_",
+
+        # Log File Path
+        [Parameter(Mandatory=$false)]
+        [String]$LogFilePath = $env:TEMP,
+
+        # Name of local Group to be converted
+        [Parameter(Mandatory=$false)]
+        [String]$LocalTargetGroupName = "Administrators",
+
+        # Identities to be ignored during the conversion
+        [Parameter(Mandatory=$false)]
+        [String[]]$ExcludeIdentityArr = @("Administrator","cm-push","Domain Admins")
     )
 
     process {
-        #region Functions
-        <#function Get-RemoteAdminGroupMember {
-            param (
-                [String]$ComputerName
-            )
-            invoke-command -ComputerName $ComputerName -ScriptBlock {
-                function GetLocalAdminGroupMember {
-                    param ([String]$Platform)
-                    #$adminRegex = "^S-1-5-21.*-500$"
-                    $domadminRegex = "^S-1-5-21.*-512"
-                    $adminArr = [System.Collections.ArrayList]@()
-                    if ($Platform -eq "W10") {
-                        Get-LocalGroupMember -SID S-1-5-32-544 | Where-Object {$_.PrincipalSource -eq "ActiveDirectory" -and $_.SID -notmatch $domadminRegex} | ForEach-Object {$adminArr.Add($_.Name)} | Out-Null
-                    }
-                    elseif ($Platform -eq "W7") {
-                        Get-LocalGroupMember -SID S-1-5-32-544 | Where-Object {($_.Name -split "\\")[0] -eq $env:USERDOMAIN -and $_.SID -notmatch $domadminRegex } | ForEach-Object {$adminArr.Add($_.Name)} | Out-Null
-                    }
-                    if ($adminArr) {
-                        return $adminArr
-                    }
-                    else {
-                        return $null
-                    }
-                }
+        # Load Modules
+        Import-Module LogStream -MinimumVersion 1.0.2
+        #Import-Module C:\code\LocalAdminGroup\LocalAdminGroup.psd1
+        Import-Module ActiveDirectory
 
-                $osVersion = (Get-WmiObject -Class win32_operatingsystem -Property Caption).Caption
-                switch -regex ($osVersion) {
-                    "^Microsoft Windows 10.*" {
-                        $adminArr = GetLocalAdminGroupMember -Platform "W10"
-                    }
-                    "^Microsoft Windows 7.*" {
-                        if ($PSVersionTable.PSVersion.Major -ne 5) {
-                            Throw [System.NotImplementedException] "Unsupported OS: Windows 7 without WMF 5.1"
-                        }
-                        else {
-                            $adminArr = GetLocalAdminGroupMember -Platform "W7"
-                        }
-                    }
-                }
-                return $adminArr
-            }
-        }#>
-        #endregion
+        # Initialize Logging
+        $LogFilePath = Join-Path -Path $LogFilePath -ChildPath "Convert-Group_$(get-date -Format yyyyMMdd).txt"
+        Start-Log -LogFilePath $LogFilePath | Out-Null
 
-        #region CurrentLocalAdminGroup
-        try {
-            Write-Verbose "Fetching local admin group members on: $ComputerName"
-            $currentAdminArr = Get-ADRemoteAdminGroupMember -ComputerName $ComputerName
-        }
-        catch [System.NotImplementedException] {
-            Write-Warning "Unsupported OS. Will return $false"
-            return $false
-            #throw "Unsupported OS"
-        }
-        #endregion
-
-        #region AddCurrentLocalAdminGroupMembers
-        if (-not ($currentAdminArr)) {
-            Write-Verbose "No members to add"
-            return $true
-        }
-        else {
-            Write-Verbose "Adding new members to ADGroup: $GroupObject"
+        foreach ($computer in $ComputerName) {
+            $groupName = $Prefix + $computer
+            Write-VerboseLog -LogFilePath $LogFilePath -Message "Converting Local Admin Group for Host: $computer"
             try {
-                $currentAdminArr | ForEach-Object {
-                    #$currentObj = ($_ -split "\\")[1]
-                    $currentObj = $_
-                    Write-Verbose "Adding member: $currentObj"
-                    Add-ADGroupMember -Identity $GroupObject -Members $currentObj
+                # Get Current Admin Users
+                try {
+                    $adminUserArr = Get-LocalGroupMember -Name $LocalTargetGroupName -ComputerName $computer -ErrorAction Stop
                 }
-            }
-            catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
-                throw "Unable to find object in AD"
-            }
-        }
-        #endregion
+                catch [System.Management.Automation.ActionPreferenceStopException] {
+                    Write-ErrorLog -LogFilePath $LogFilePath -Message "Could not fetch current group members on: $computer"
+                    continue
+                }
 
-        #region ReplaceInLocalAdminGroup
-        Write-Verbose "Adding AD Group $($GroupObject.Name) to local Admin Group on: $ComputerName"
-        try {
-            Add-ADRemoteAdminGroupMember -ComputerName $ComputerName -Member $GroupObject.Name
-            $currentAdminArr | ForEach-Object {
-                $currentObj = ($_ -split "\\")[1]
-                Write-Verbose "Removing $currentObj from Local Admin Group on: $ComputerName"
-                Remove-adRemoteAdminGroupMember -ComputerName $ComputerName -Member $currentObj | Out-Null
+                if ($adminUserArr) {
+                    # Add Current Admin Users to Domain Group
+                    Write-VerboseLog -LogFilePath $LogFilePath -Message "Checking current group for exclusion criteria"
+                    try {
+                        $userStr = ($adminUserArr | Where-Object {$_.Domain -eq $env:USERDOMAIN -and $ExcludeIdentityArr -notcontains $_.Name} | Select-Object -ExpandProperty Name)
+                        Write-VerboseLog -LogFilePath $LogFilePath -Message "Users to be added are: $($userStr -join ",")"
+                        Add-ADGroupMember -Identity $groupName -Members $userStr
+                    }
+                    catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+                        Write-ErrorLog -LogFilePath $LogFilePath -Message $Error[0].Exception.Message
+                        continue
+                    }
+
+                    # Adding AD Group to local Admin Group
+                    try {
+                        Write-VerboseLog -LogFilePath $LogFilePath -Message "Adding $groupName to local Admin Group on Client: $computer"
+                        Add-ADRemoteAdminGroupMember -ComputerName $computer -Member $groupName
+                    }
+                    catch [System.Management.Automation.ActionPreferenceStopException] {
+                        Write-ErrorLog -LogFilePath  $LogFilePath -Message "Error adding group $groupName to local admin Group on: $computer"
+                    }
+
+                    # Remove Members from local Admin Group
+                    $userStr | ForEach-Object {
+                        Write-VerboseLog -LogFilePath $LogFilePath -Message "Removing $_ from Admin Group on: $computer"
+                        Remove-ADRemoteAdminGroupMember -ComputerName $computer -Member $_
+                    }
+                }
+                else {
+                    Write-WarningLog -LogFilePath $LogFilePath -Message "Did not receive any members on $computer"
+                }
+
+
+
+
+            }
+            catch [System.Management.Automation.RuntimeException] {
+                Write-ErrorLog -LogFilePath $LogFilePath -Message $Error[0].Exception.Message
             }
         }
-        catch {
 
-        }
-        return $true
-        #endregion
+        Stop-Log -LogFilePath $LogFilePath | Out-Null
     }
 }
