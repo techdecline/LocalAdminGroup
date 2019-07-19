@@ -63,7 +63,6 @@ function Convert-CMRemoteAdminGroup {
                 try {
                     $userStr = ($adminUserArr | Where-Object {$_.Domain -eq $env:USERDOMAIN -and $ExcludeIdentityArr -notcontains $_.Name} )
                     Write-VerboseLog -LogFilePath $LogFilePath -Message "Users to be added are: $($userStr.Name -join ",")"
-                    #Add-ADGroupMember -Identity $groupName -Members $userStr
                     $userStr | ForEach-Object {
                         Write-VerboseLog -LogFilePath $LogFilePath -Message "Adding $($_.Name) to Admin Group"
                         $obj = $_
@@ -92,7 +91,7 @@ function Convert-CMRemoteAdminGroup {
                         Add-CMRemoteAdminGroup @groupParam
                     }
                 }
-                catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+                catch {
                     Write-ErrorLog -LogFilePath $LogFilePath -Message $Error[0].Exception.Message
                     continue
                 }
@@ -100,8 +99,7 @@ function Convert-CMRemoteAdminGroup {
                 # Adding AD Group to local Admin Group
                 try {
                     Write-VerboseLog -LogFilePath $LogFilePath -Message "Adding $groupName to local Admin Group on Client: $computer"
-                    #Add-ADRemoteAdminGroupMember -ComputerName $computer -Member $groupName
-                    Add-LocalGroupMember -Group $LocalTargetGroupName -Member $groupName
+                    Add-LocalGroupMember -Group $LocalTargetGroupName -Member $groupName -ErrorAction Stop
                 }
                 catch [System.Management.Automation.ActionPreferenceStopException] {
                     Write-ErrorLog -LogFilePath  $LogFilePath -Message "Error adding group $groupName to local admin Group on: $computer"
@@ -109,18 +107,14 @@ function Convert-CMRemoteAdminGroup {
 
                 # Remove Members from local Admin Group
                 $userStr | ForEach-Object {
-                    Write-VerboseLog -LogFilePath $LogFilePath -Message "Removing $($_.Name) from Admin Group on: $computer"
+                    Write-VerboseLog -LogFilePath $LogFilePath -Message "Removing $($_.Name) from Admin Group on: $env:COMPUTERNAME"
                     #Remove-ADRemoteAdminGroupMember -ComputerName $computer -Member $_
                     Remove-LocalGroupMember -Group $LocalTargetGroupName -Member $_.Name
                 }
             }
             else {
-                Write-WarningLog -LogFilePath $LogFilePath -Message "Did not receive any members on $computer"
+                Write-WarningLog -LogFilePath $LogFilePath -Message "Did not receive any members on $env:COMPUTERNAME"
             }
-
-
-
-
         }
         catch [System.Management.Automation.RuntimeException] {
             Write-ErrorLog -LogFilePath $LogFilePath -Message $Error[0].Exception.Message

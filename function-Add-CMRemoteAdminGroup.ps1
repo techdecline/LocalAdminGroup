@@ -23,17 +23,17 @@ function Add-CMRemoteAdminGroup {
 
         # Member User
         [Parameter(Mandatory,ParameterSetName="AddUser")]
-        [Microsoft.ActiveDirectory.Management.ADUser]
+        [String]
         $MemberUser,
 
         # Member group
         [Parameter(Mandatory,ParameterSetName="AddGroup")]
-        [Microsoft.ActiveDirectory.Management.ADGroup]
+        [String]
         $MemberGroup,
 
         # Member Computer
         [Parameter(Mandatory,ParameterSetName="AddComputer")]
-        [Microsoft.ActiveDirectory.Management.ADComputer]
+        [String]
         $MemberComputer
     )
     process {
